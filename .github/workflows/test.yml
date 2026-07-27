@@ -40,16 +40,43 @@ jobs:
             echo "dir=coverage/branches/${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           fi
 
+      # The push and pull_request runs for the same commit publish concurrently,
+      # so a plain push can be rejected when the other run got there first.
+      # Publish manually and retry from a fresh clone on conflicts.
       - name: Publish coverage report to GitHub Pages branch
         if: always() && hashFiles('coverage/index.html') != ''
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: ./coverage
-          destination_dir: ${{ steps.coverage-folder.outputs.dir }}
-          keep_files: true
-          commit_message: "Coverage report for ${{ github.event.pull_request.number && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
+        env:
+          DEST: ${{ steps.coverage-folder.outputs.dir }}
+          REMOTE: https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          CLONE="$RUNNER_TEMP/gh-pages-publish"
+          for attempt in 1 2 3 4 5; do
+            rm -rf "$CLONE"
+            if ! git clone --depth 1 --branch gh-pages "$REMOTE" "$CLONE" 2>/dev/null; then
+              # gh-pages does not exist yet: start it from an empty history
+              git init -b gh-pages "$CLONE"
+              git -C "$CLONE" remote add origin "$REMOTE"
+            fi
+            rm -rf "$CLONE/$DEST"
+            mkdir -p "$CLONE/$DEST"
+            cp -R coverage/. "$CLONE/$DEST/"
+            git -C "$CLONE" add -A
+            if git -C "$CLONE" diff --cached --quiet; then
+              echo "Coverage report is unchanged, nothing to publish."
+              exit 0
+            fi
+            git -C "$CLONE" commit -m "Coverage report for $DEST ($GITHUB_SHA)"
+            if git -C "$CLONE" push origin gh-pages; then
+              echo "Published $DEST."
+              exit 0
+            fi
+            echo "Push rejected (attempt $attempt), retrying with a fresh clone..."
+            sleep $((attempt * 3))
+          done
+          echo "Failed to publish coverage report after 5 attempts."
+          exit 1
 
       - name: Add coverage report to job summary
         if: always()
