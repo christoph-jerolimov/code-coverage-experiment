@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# Needed to push the coverage report to the gh-pages branch.
+permissions:
+  contents: write
+
 jobs:
   test:
     name: Unit tests with coverage
@@ -25,11 +29,32 @@ jobs:
       - name: Run unit tests with coverage
         run: npm run test:coverage
 
+      # PRs publish to coverage/<pr-number>, pushes to coverage/<branch-name>.
+      - name: Determine coverage publish folder
+        id: coverage-folder
+        if: always()
+        run: echo "dir=coverage/${{ github.event.pull_request.number || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish coverage report to GitHub Pages branch
+        if: always() && hashFiles('coverage/index.html') != ''
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./coverage
+          destination_dir: ${{ steps.coverage-folder.outputs.dir }}
+          keep_files: true
+          commit_message: "Coverage report for ${{ github.event.pull_request.number && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
+
       - name: Add coverage report to job summary
         if: always()
         run: |
           if [ -f coverage/coverage-summary.json ]; then
             node scripts/coverage-summary.mjs >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo ''
+              echo "📊 [Browse the HTML coverage report](https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/${{ steps.coverage-folder.outputs.dir }}/)"
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Upload coverage report
