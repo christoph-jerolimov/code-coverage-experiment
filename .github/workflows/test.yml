@@ -25,16 +25,11 @@ jobs:
       - name: Run unit tests with coverage
         run: npm run test:coverage
 
-      - name: Add coverage summary to job summary
+      - name: Add coverage report to job summary
         if: always()
         run: |
           if [ -f coverage/coverage-summary.json ]; then
-            node -e '
-              const { total } = require("./coverage/coverage-summary.json");
-              const rows = ["lines", "statements", "functions", "branches"]
-                .map((k) => `| ${k} | ${total[k].pct}% | ${total[k].covered}/${total[k].total} |`);
-              console.log("## Coverage\n\n| Metric | Coverage | Covered/Total |\n| --- | --- | --- |\n" + rows.join("\n"));
-            ' >> "$GITHUB_STEP_SUMMARY"
+            node scripts/coverage-summary.mjs >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Upload coverage report
