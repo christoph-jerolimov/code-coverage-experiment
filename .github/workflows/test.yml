@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: [main]
+    branches-ignore: [gh-pages]
   pull_request:
 
 # Needed to push the coverage report to the gh-pages branch.
@@ -29,11 +29,16 @@ jobs:
       - name: Run unit tests with coverage
         run: npm run test:coverage
 
-      # PRs publish to coverage/<pr-number>, pushes to coverage/<branch-name>.
+      # PRs publish to coverage/pr/<pr-number>, pushes to coverage/branches/<branch-name>.
       - name: Determine coverage publish folder
         id: coverage-folder
         if: always()
-        run: echo "dir=coverage/${{ github.event.pull_request.number || github.ref_name }}" >> "$GITHUB_OUTPUT"
+        run: |
+          if [ -n "${{ github.event.pull_request.number }}" ]; then
+            echo "dir=coverage/pr/${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "dir=coverage/branches/${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Publish coverage report to GitHub Pages branch
         if: always() && hashFiles('coverage/index.html') != ''

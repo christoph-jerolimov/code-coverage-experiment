@@ -1,0 +1,55 @@
+name: Coverage cleanup
+
+on:
+  schedule:
+    # Every Sunday at 03:00 UTC
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+# Needed to push the cleaned-up gh-pages branch.
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    name: Remove stale coverage reports
+    runs-on: ubuntu-latest
+    steps:
+      # Full history of all branches, so the cleanup script can read
+      # last-push dates via git.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check whether gh-pages branch exists
+        id: gh-pages
+        run: echo "exists=$(git ls-remote --heads origin gh-pages | wc -l)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout gh-pages branch
+        if: steps.gh-pages.outputs.exists == '1'
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Remove stale coverage reports
+        if: steps.gh-pages.outputs.exists == '1'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PAGES_DIR: gh-pages
+        run: node scripts/cleanup-coverage.mjs
+
+      - name: Push changes to gh-pages
+        if: steps.gh-pages.outputs.exists == '1'
+        working-directory: gh-pages
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "Remove stale coverage reports"
+            git push origin gh-pages
+          else
+            echo "gh-pages is already clean, nothing to push."
+          fi
