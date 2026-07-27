@@ -1,0 +1,14 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { greet } from '../utils/greeting';
+import { createCounter, increment } from '../utils/counter';
+
+const greeting = greet('astro');
+const counter = increment(createCounter(0, 0, 10), 3);
+---
+
+<Layout title="Code Coverage Experiment">
+  <h1>{greeting}</h1>
+  <p>This is a small Astro app used to experiment with unit tests and code coverage.</p>
+  <p>The counter is currently at <strong>{counter.count}</strong> (range {counter.min}–{counter.max}).</p>
+</Layout>

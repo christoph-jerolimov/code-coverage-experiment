@@ -1,1 +1,34 @@
 # code-coverage-experiment
+
+A small [Astro](https://astro.build) app with unit tests and code coverage, used to experiment with running coverage in CI.
+
+## Project structure
+
+```
+src/
+  layouts/Layout.astro     Base HTML layout
+  pages/index.astro        Home page
+  utils/greeting.ts        Greeting helpers (unit tested)
+  utils/counter.ts         Counter helpers (unit tested)
+  utils/*.test.ts          Vitest unit tests
+.github/workflows/test.yml CI workflow: tests + coverage
+```
+
+## Commands
+
+| Command                 | Action                                        |
+| ----------------------- | --------------------------------------------- |
+| `npm install`           | Install dependencies                          |
+| `npm run dev`           | Start the dev server at `localhost:4321`      |
+| `npm run build`         | Build the production site to `./dist/`        |
+| `npm test`              | Run unit tests once                           |
+| `npm run test:watch`    | Run unit tests in watch mode                  |
+| `npm run test:coverage` | Run unit tests and generate a coverage report |
+
+## Testing & coverage
+
+Tests are written with [Vitest](https://vitest.dev), wired into Astro via `getViteConfig()` in `vitest.config.ts`. Coverage is collected with the V8 provider (`@vitest/coverage-v8`) and reported as text, `lcov`, `html`, and `json-summary` into the `coverage/` directory. Coverage thresholds (80% for lines, statements, functions, and branches) fail the test run when not met.
+
+## CI
+
+The [`Tests` workflow](.github/workflows/test.yml) runs on pushes to `main` and on pull requests. It installs dependencies, runs the tests with coverage, prints a coverage table into the job summary, and uploads the full HTML/lcov coverage report as a build artifact.
