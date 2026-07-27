@@ -1,0 +1,98 @@
+name: Tests
+
+on:
+  push:
+    branches-ignore: [gh-pages]
+  pull_request:
+
+# Needed to push the coverage report to the gh-pages branch.
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Unit tests with coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests with coverage
+        run: npm run test:coverage
+
+      # PRs publish to coverage/pr/<pr-number>, pushes to coverage/branches/<branch-name>.
+      - name: Determine coverage publish folder
+        id: coverage-folder
+        if: always()
+        run: |
+          if [ -n "${{ github.event.pull_request.number }}" ]; then
+            echo "dir=coverage/pr/${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "dir=coverage/branches/${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The push and pull_request runs for the same commit publish concurrently,
+      # so a plain push can be rejected when the other run got there first.
+      # Publish manually and retry from a fresh clone on conflicts.
+      - name: Publish coverage report to GitHub Pages branch
+        if: always() && hashFiles('coverage/index.html') != ''
+        env:
+          DEST: ${{ steps.coverage-folder.outputs.dir }}
+          REMOTE: https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          CLONE="$RUNNER_TEMP/gh-pages-publish"
+          for attempt in 1 2 3 4 5; do
+            rm -rf "$CLONE"
+            if ! git clone --depth 1 --branch gh-pages "$REMOTE" "$CLONE" 2>/dev/null; then
+              # gh-pages does not exist yet: start it from an empty history
+              git init -b gh-pages "$CLONE"
+              git -C "$CLONE" remote add origin "$REMOTE"
+            fi
+            rm -rf "$CLONE/$DEST"
+            mkdir -p "$CLONE/$DEST"
+            cp -R coverage/. "$CLONE/$DEST/"
+            git -C "$CLONE" add -A
+            if git -C "$CLONE" diff --cached --quiet; then
+              echo "Coverage report is unchanged, nothing to publish."
+              exit 0
+            fi
+            git -C "$CLONE" commit -m "Coverage report for $DEST ($GITHUB_SHA)"
+            if git -C "$CLONE" push origin gh-pages; then
+              echo "Published $DEST."
+              exit 0
+            fi
+            echo "Push rejected (attempt $attempt), retrying with a fresh clone..."
+            sleep $((attempt * 3))
+          done
+          echo "Failed to publish coverage report after 5 attempts."
+          exit 1
+
+      - name: Add coverage report to job summary
+        if: always()
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            node scripts/coverage-summary.mjs >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo ''
+              echo "📊 [Browse the HTML coverage report](https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/${{ steps.coverage-folder.outputs.dir }}/)"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
