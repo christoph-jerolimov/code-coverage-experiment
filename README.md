@@ -22,6 +22,7 @@ src/
 | `npm run dev`           | Start the dev server at `localhost:4321`      |
 | `npm run build`         | Build the production site to `./dist/`        |
 | `npm test`              | Run unit tests once                           |
+| `npm run analyse:sessions` | Analyse agent sessions via the agentsview CLI ([docs](scripts/session-analysis/README.md)) |
 | `npm run test:watch`    | Run unit tests in watch mode                  |
 | `npm run test:coverage` | Run unit tests and generate a coverage report |
 
